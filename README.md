@@ -1,6 +1,6 @@
-# SpeakPilot (Stage 2)
+# SpeakPilot (Stage 3)
 
-Stage 2 extends the Stage 1 skeleton with live microphone speech recognition.
+Stage 3 extends SpeakPilot with async grammar correction after STT.
 
 ## Requirements
 - Python 3.11+
@@ -12,21 +12,17 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## Configure
+Add your API key to `.env`:
+```env
+OPENAI_API_KEY=your_openai_api_key_here
+LOG_LEVEL=INFO
+```
+
 ## Run
 ```bash
 python speakpilot/main.py
 ```
 
-## Stage 2 Flow
-Microphone -> AudioCapture -> STTEngine (faster-whisper) -> SentenceParser -> console output
-
-## Included in Stage 2
-- Non-blocking microphone audio capture (`sounddevice`)
-- ~2 second PCM16 chunks at 16 kHz mono
-- `faster-whisper` STT wrapper module
-- Background STT worker so transcription does not block audio capture
-- Graceful shutdown with Ctrl+C
-
-## Not Included Yet
-- OpenAI integration
-- UI overlay
+## Stage 3 Flow
+Mic -> STT -> SentenceParser -> CorrectionEngine -> DiffEngine -> Console

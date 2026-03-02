@@ -1,8 +1,13 @@
-"""Correction engine interface and stage-1 rule-based stub implementation."""
+"""Correction engine using OpenAI with JSON-validated responses."""
 
 from __future__ import annotations
 
+import json
+import os
 from dataclasses import dataclass
+from typing import Any
+
+from openai import OpenAI
 
 
 @dataclass(slots=True)
@@ -21,50 +26,83 @@ class CorrectionResult:
 
 
 class CorrectionEngine:
-    """Apply lightweight demo correction rules for stage 1."""
+    """Correct sentence grammar using OpenAI and return structured results."""
+
+    _SYSTEM_PROMPT = (
+        "You are an English grammar correction engine.\n"
+        "Correct grammar only.\n"
+        "Do not change meaning.\n"
+        "Return JSON:\n"
+        "{\n"
+        '  "original": string,\n'
+        '  "corrected": string,\n'
+        '  "mistakes": [{"wrong": string, "correct": string, "type": string}],\n'
+        '  "explanation": string\n'
+        "}"
+    )
+
+    def __init__(self) -> None:
+        api_key = os.getenv("OPENAI_API_KEY", "")
+        self._client = OpenAI(api_key=api_key)
 
     def correct(self, sentence: str) -> CorrectionResult:
         original = sentence.strip()
-        lowered = original.lower()
+        if not original:
+            return self._fallback_result(original)
 
-        if "i go yesterday" in lowered:
-            corrected = self._replace_case_insensitive(original, "I go yesterday", "I went yesterday")
-            return CorrectionResult(
-                original=original,
-                corrected=corrected,
-                mistakes=[Mistake(wrong="go", correct="went", type="Tense")],
-                explanation="Adjusted verb tense to match past-time marker 'yesterday'.",
-            )
+        for _ in range(2):
+            try:
+                response = self._client.responses.create(
+                    model="gpt-4.1-mini",
+                    input=[
+                        {"role": "system", "content": self._SYSTEM_PROMPT},
+                        {"role": "user", "content": original},
+                    ],
+                )
+                payload = json.loads(response.output_text)
+                return self._parse_result(payload, original)
+            except Exception:
+                continue
 
-        if "in internet" in lowered:
-            corrected = self._replace_case_insensitive(original, "in internet", "on the internet")
-            return CorrectionResult(
-                original=original,
-                corrected=corrected,
-                mistakes=[Mistake(wrong="in internet", correct="on the internet", type="Prepositions")],
-                explanation="Updated preposition phrase to the natural expression.",
-            )
+        return self._fallback_result(original)
 
-        if "i am agree" in lowered:
-            corrected = self._replace_case_insensitive(original, "I am agree", "I agree")
-            return CorrectionResult(
-                original=original,
-                corrected=corrected,
-                mistakes=[Mistake(wrong="am agree", correct="agree", type="Grammar")],
-                explanation="Removed unnecessary auxiliary verb for 'agree'.",
-            )
+    def _parse_result(self, payload: Any, original: str) -> CorrectionResult:
+        if not isinstance(payload, dict):
+            raise ValueError("Response payload is not a JSON object")
 
+        corrected = payload.get("corrected")
+        explanation = payload.get("explanation")
+        mistakes_raw = payload.get("mistakes", [])
+
+        if not isinstance(corrected, str) or not isinstance(explanation, str) or not isinstance(mistakes_raw, list):
+            raise ValueError("Invalid payload fields")
+
+        mistakes: list[Mistake] = []
+        for item in mistakes_raw:
+            if not isinstance(item, dict):
+                raise ValueError("Invalid mistake entry")
+
+            wrong = item.get("wrong")
+            correct = item.get("correct")
+            mistake_type = item.get("type")
+
+            if not isinstance(wrong, str) or not isinstance(correct, str) or not isinstance(mistake_type, str):
+                raise ValueError("Invalid mistake fields")
+
+            mistakes.append(Mistake(wrong=wrong, correct=correct, type=mistake_type))
+
+        return CorrectionResult(
+            original=original,
+            corrected=corrected,
+            mistakes=mistakes,
+            explanation=explanation,
+        )
+
+    @staticmethod
+    def _fallback_result(original: str) -> CorrectionResult:
         return CorrectionResult(
             original=original,
             corrected=original,
             mistakes=[],
-            explanation="Looks good.",
+            explanation="Unable to validate correction response; using original sentence.",
         )
-
-    @staticmethod
-    def _replace_case_insensitive(text: str, source: str, replacement: str) -> str:
-        """Replace the first instance of source in text, case-insensitively."""
-        index = text.lower().find(source.lower())
-        if index == -1:
-            return text
-        return text[:index] + replacement + text[index + len(source) :]
