@@ -1,14 +1,16 @@
-"""Stage-1 CLI entrypoint for SpeakPilot."""
+"""Stage-2 CLI entrypoint for SpeakPilot with microphone STT pipeline."""
 
 from __future__ import annotations
 
 import logging
+import queue
+import signal
+import threading
 
-from speakpilot.analytics.session_tracker import SessionTracker
 from speakpilot.config import load_config
-from speakpilot.core.correction_engine import CorrectionEngine
-from speakpilot.core.diff_engine import DiffEngine
+from speakpilot.core.audio_capture import AudioCapture
 from speakpilot.core.sentence_parser import SentenceParser
+from speakpilot.core.stt_engine import STTEngine
 
 
 def setup_logging(log_level: str) -> None:
@@ -23,40 +25,55 @@ def run() -> None:
     setup_logging(config.log_level)
 
     logger = logging.getLogger("speakpilot")
-    logger.info("SpeakPilot stage 1 starting")
+    logger.info("SpeakPilot stage 2 starting")
 
     sentence_parser = SentenceParser()
-    correction_engine = CorrectionEngine()
-    diff_engine = DiffEngine()
-    session_tracker = SessionTracker()
-    session_tracker.start()
+    stt_engine = STTEngine()
+    audio_capture = AudioCapture()
 
-    print("SpeakPilot Stage 1")
-    print("Type a sentence and press Enter. Type 'exit' to quit.")
+    audio_queue: queue.Queue[bytes] = queue.Queue()
+    stop_event = threading.Event()
 
-    while True:
-        user_input = input("\n> ").strip()
-        if user_input.lower() == "exit":
-            break
+    def on_audio_chunk(audio_bytes: bytes) -> None:
+        audio_queue.put(audio_bytes)
 
-        sentences = sentence_parser.feed_text(user_input)
-        if not sentences:
-            print("No valid sentence detected.")
-            continue
+    def stt_worker() -> None:
+        while not stop_event.is_set() or not audio_queue.empty():
+            try:
+                audio_bytes = audio_queue.get(timeout=0.2)
+            except queue.Empty:
+                continue
 
-        for sentence in sentences:
-            result = correction_engine.correct(sentence)
-            diff_output = diff_engine.format_console(result.original, result.corrected)
-            session_tracker.record(result)
+            text = stt_engine.transcribe(audio_bytes)
+            if not text:
+                continue
 
-            print("-" * 40)
-            print(f"Original   : {result.original}")
-            print(f"Corrected  : {result.corrected}")
-            print(f"Diff       : {diff_output}")
-            print(f"Explanation: {result.explanation}")
+            sentences = sentence_parser.feed_text(text)
+            for sentence in sentences:
+                print(f"[STT] {sentence}")
 
-    print("\nSession Summary")
-    print(session_tracker.summary())
+    worker = threading.Thread(target=stt_worker, daemon=True)
+    worker.start()
+
+    def request_shutdown(_sig: int, _frame: object) -> None:
+        _ = _frame
+        logger.info("Shutdown requested")
+        stop_event.set()
+
+    signal.signal(signal.SIGINT, request_shutdown)
+
+    print("SpeakPilot Stage 2")
+    print("Listening from microphone... Press Ctrl+C to stop.")
+
+    try:
+        audio_capture.start(on_audio_chunk)
+        while not stop_event.is_set():
+            stop_event.wait(0.2)
+    finally:
+        stop_event.set()
+        audio_capture.stop()
+        worker.join(timeout=2.0)
+        logger.info("SpeakPilot stage 2 stopped")
 
 
 if __name__ == "__main__":

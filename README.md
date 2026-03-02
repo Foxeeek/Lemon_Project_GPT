@@ -1,6 +1,6 @@
-# SpeakPilot (Stage 1)
+# SpeakPilot (Stage 2)
 
-Stage 1 provides a clean Python project skeleton with a runnable manual-text correction pipeline.
+Stage 2 extends the Stage 1 skeleton with live microphone speech recognition.
 
 ## Requirements
 - Python 3.11+
@@ -17,16 +17,16 @@ pip install -r requirements.txt
 python speakpilot/main.py
 ```
 
-## What Stage 1 Includes
-- Project structure for future app layers (`core`, `ui`, `analytics`)
-- Environment-based configuration loading from `.env`
-- Logging initialization
-- A minimal interactive CLI loop
-- Stubbed correction rules and word-level diff rendering
-- In-memory session analytics summary
+## Stage 2 Flow
+Microphone -> AudioCapture -> STTEngine (faster-whisper) -> SentenceParser -> console output
 
-## What Stage 1 Does Not Include
-- Audio capture
-- Whisper integration
-- OpenAI API calls
-- PyQt overlay implementation
+## Included in Stage 2
+- Non-blocking microphone audio capture (`sounddevice`)
+- ~2 second PCM16 chunks at 16 kHz mono
+- `faster-whisper` STT wrapper module
+- Background STT worker so transcription does not block audio capture
+- Graceful shutdown with Ctrl+C
+
+## Not Included Yet
+- OpenAI integration
+- UI overlay
