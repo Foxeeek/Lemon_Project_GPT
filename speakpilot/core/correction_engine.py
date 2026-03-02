@@ -1,4 +1,4 @@
-"""Correction engine using OpenAI with JSON-validated responses."""
+"""Correction engine using OpenAI with compact JSON responses."""
 
 from __future__ import annotations
 
@@ -29,15 +29,13 @@ class CorrectionEngine:
     """Correct sentence grammar using OpenAI and return structured results."""
 
     _SYSTEM_PROMPT = (
-        "You are an English grammar correction engine.\n"
-        "Correct grammar only.\n"
+        "You are an English grammar corrector.\n"
+        "Fix grammar only.\n"
         "Do not change meaning.\n"
         "Return JSON:\n"
         "{\n"
-        '  "original": string,\n'
         '  "corrected": string,\n'
-        '  "mistakes": [{"wrong": string, "correct": string, "type": string}],\n'
-        '  "explanation": string\n'
+        '  "explanation": string (max 15 words)\n'
         "}"
     )
 
@@ -54,6 +52,7 @@ class CorrectionEngine:
             try:
                 response = self._client.responses.create(
                     model="gpt-4.1-mini",
+                    temperature=0.0,
                     input=[
                         {"role": "system", "content": self._SYSTEM_PROMPT},
                         {"role": "user", "content": original},
@@ -72,30 +71,14 @@ class CorrectionEngine:
 
         corrected = payload.get("corrected")
         explanation = payload.get("explanation")
-        mistakes_raw = payload.get("mistakes", [])
-
-        if not isinstance(corrected, str) or not isinstance(explanation, str) or not isinstance(mistakes_raw, list):
+        if not isinstance(corrected, str) or not isinstance(explanation, str):
             raise ValueError("Invalid payload fields")
-
-        mistakes: list[Mistake] = []
-        for item in mistakes_raw:
-            if not isinstance(item, dict):
-                raise ValueError("Invalid mistake entry")
-
-            wrong = item.get("wrong")
-            correct = item.get("correct")
-            mistake_type = item.get("type")
-
-            if not isinstance(wrong, str) or not isinstance(correct, str) or not isinstance(mistake_type, str):
-                raise ValueError("Invalid mistake fields")
-
-            mistakes.append(Mistake(wrong=wrong, correct=correct, type=mistake_type))
 
         return CorrectionResult(
             original=original,
-            corrected=corrected,
-            mistakes=mistakes,
-            explanation=explanation,
+            corrected=corrected.strip() or original,
+            mistakes=[],
+            explanation=explanation.strip() or "Grammar adjusted.",
         )
 
     @staticmethod
@@ -104,5 +87,5 @@ class CorrectionEngine:
             original=original,
             corrected=original,
             mistakes=[],
-            explanation="Unable to validate correction response; using original sentence.",
+            explanation="Unable to correct right now.",
         )

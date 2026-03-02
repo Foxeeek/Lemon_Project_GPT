@@ -17,7 +17,7 @@ class AudioCapture:
         self,
         sample_rate: int = 16000,
         channels: int = 1,
-        chunk_seconds: float = 2.0,
+        chunk_seconds: float = 1.0,
     ) -> None:
         self.sample_rate = sample_rate
         self.channels = channels
@@ -31,7 +31,7 @@ class AudioCapture:
         self._lock = threading.Lock()
 
     def start(self, callback: Callable[[bytes], None]) -> None:
-        """Start microphone capture and emit ~2 second PCM16 chunks."""
+        """Start microphone capture and emit ~1 second PCM16 chunks."""
         if self._stream is not None:
             self._logger.warning("Audio capture already started")
             return
