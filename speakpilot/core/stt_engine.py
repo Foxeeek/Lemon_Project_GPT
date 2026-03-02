@@ -22,7 +22,7 @@ class STTEngine:
 
         try:
             audio = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
-            segments, _ = self._model.transcribe(audio, language=None)
+            segments, _ = self._model.transcribe(audio, language="en", task="transcribe")
             text = " ".join(segment.text.strip() for segment in segments).strip()
             return text
         except Exception as exc:  # graceful runtime handling

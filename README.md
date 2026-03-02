@@ -1,6 +1,6 @@
-# SpeakPilot (Stage 3)
+# SpeakPilot (Stage 4)
 
-Stage 3 extends SpeakPilot with async grammar correction after STT.
+Stage 4 adds a real PyQt6 overlay UI to the async microphone correction pipeline.
 
 ## Requirements
 - Python 3.11+
@@ -21,8 +21,8 @@ LOG_LEVEL=INFO
 
 ## Run
 ```bash
-python speakpilot/main.py
+python -m speakpilot.main
 ```
 
-## Stage 3 Flow
-Mic -> STT -> SentenceParser -> CorrectionEngine -> DiffEngine -> Console
+## Stage 4 Flow
+Mic -> STT (English fixed) -> SentenceParser -> CorrectionEngine (async) -> DiffEngine -> Overlay UI
